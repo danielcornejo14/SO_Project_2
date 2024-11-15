@@ -1,0 +1,5 @@
+// Message that the master sends to the node
+{
+    "type": "error",  // The type of message (Error for failure on a request, Response on a resource request, Assignment for a task for the node to do)
+    "body": "Error 404" // Body of the message,  for errors the code, for response a dictionary with the resource name and "location/access point", for assignment the process's json
+}

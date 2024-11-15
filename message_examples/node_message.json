@@ -1,0 +1,6 @@
+// Message that the node sends to the master
+{
+    "priority": 3,  // The lower the number, the higher the priority, DO NOT USE 0
+    "type": "Error",  // The type of message (Error for failure on a process, Request a resource, Success when a process finished, Warning when node is close to full)
+    "body": "Error 404" // Body of the message,  for errors the code, for requests the resource, for success the process id, for warnings the node id
+}

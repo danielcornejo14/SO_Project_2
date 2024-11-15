@@ -7,10 +7,8 @@ class Node:
         self.load = 0
         self.master = master
         self.resources = set()
-        self.master = master # Master object reference for communication
         self.is_active = True
-        self.lock = threading.Lock() # Lock for thread safety
-
+        self.lock = threading.Lock()
     
     def assign_process(self, process_id):
         with self.lock:

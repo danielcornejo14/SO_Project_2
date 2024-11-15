@@ -1,5 +1,5 @@
 import threading
-class Resource_Manager:
+class ResourceManager:
     """
     Potencialmente usada por la clase Master para manejar los recursos.
     """
@@ -7,19 +7,20 @@ class Resource_Manager:
         self.resources = {}
         self.lock = threading.Lock()
 
-    def add_resource(self, resource_id):
+    def add_resource(self, resource_id, resource_quantity):
         with self.lock:
-            self.resources[resource_id] = True
+            self.resources[resource_id] = resource_quantity
     
     def request_resource(self, resource_id):
         with self.lock:
-            if self.resources.get(resource_id, False):
-                self.resources[resource_id] = False
+            if self.resources.get(resource_id, 0) > 0:
+                self.resources[resource_id] -= 1
                 return True
             return False
     
     def release_resource(self, resource_id):
         with self.lock:
-            if resource_id in self.resources:
-                self.resources[resource_id] = True
+            if self.resources.get(resource_id, 0):
+                self.resources[resource_id] += 1
                 return True
+            return False

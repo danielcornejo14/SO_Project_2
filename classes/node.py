@@ -23,7 +23,10 @@ class Node:
             print(f"Nodo {self.node_id} ha liberado el proceso {process_id}. Carga actual: {self.load}")
 
     def request_resource(self, resource_id):
-        """Solicita un recurso al maestro."""
+        """
+        Solicita un recurso al master.
+        El master debe de tener un método assign_resource que permita asignar un recurso a un nodo.
+        """
         success = self.master.assign_resource(self, resource_id)
         if success:
             with self.lock:
@@ -33,7 +36,10 @@ class Node:
             print(f"Nodo {self.node_id} está en espera para el recurso {resource_id}")
 
     def release_resource(self, resource_id):
-        """Libera un recurso, permitiendo que otros nodos puedan utilizarlo."""
+        """
+        Libera un recurso, permitiendo que otros nodos puedan utilizarlo.
+        El master debe de tener un método release_resource que permita recibir un recurso liberado por un nodo.
+        """
         with self.lock:
             if resource_id in self.resources:
                 self.resources.remove(resource_id)

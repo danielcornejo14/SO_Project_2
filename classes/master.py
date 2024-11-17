@@ -2,6 +2,9 @@ import threading
 from .node import Node
 from queue import PriorityQueue
 import time
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Master:
     def __init__(self, num_nodes, resource_manager):
@@ -10,7 +13,8 @@ class Master:
         # Create and fill the list of nodes
         self.nodes = [Node(i, self) for i in range(num_nodes)]
 
-        self.lock = threading.Lock()
+        self.process_lock = threading.Lock()
+        self.resource_lock = threading.Lock()
 
         # Create a resource manager
         self.resource_manager = resource_manager
@@ -35,41 +39,47 @@ class Master:
 
     def assign_process(self):
         while self.running:
-            if not self.process_queue.empty():
-                _, process = self.process_queue.get_nowait()
-                # Find the node with the lowest load
-                lowest_load_node = min(self.nodes, key=lambda node: node.load)
-                lowest_load_node.queue_process(process)
+            with self.process_lock:
+                if not self.process_queue.empty():
+                    _, process = self.process_queue.get_nowait()
+                    # Find the node with the lowest load
+                    lowest_load_node = min(self.nodes, key=lambda node: node.load)
+                    lowest_load_node.queue_process(process)
 
     def queue_resource(self, resource, node_id):
         """
         Asigna un recurso a un nodo.
         """
         if self.running:
-            try:
-                self.resource_queue[node_id] = resource
-                return True
-            except:
-                return False
-                
+                try:
+                    with self.resource_lock:
+                        self.resource_queue[node_id] = resource
+                        return True
+                except:
+                    return False
+                    
     def assign_resource(self):
         while self.running:
-            with self.lock:
-                while self.resource_queue:
-                    node_id, resource = next(iter(self.resource_queue.items()))
+            with self.resource_lock:
+                for node_id, resource in list(self.resource_queue.items()):
                     if self.resource_manager.request_resource(resource):
                         self.nodes[node_id].accept_resource(resource)
                         self.resource_queue.pop(node_id)
-                time.sleep(1) 
+                    else:
+                        logging.warning(f"Master: No hay recurso {resource} disponible para el nodo {node_id}")
+            time.sleep(1)
     
     def release_resource(self, resource, node_id):
         """
         Libera un recurso de un nodo.
         """
-        with self.lock:
-            self.resource_manager.release_resource(resource)
-            return True
-        return False #failed to release resource
+        try:
+            with self.resource_lock:
+                logging.info(f"Master: Liberando recurso {resource} del nodo {node_id}")
+                self.resource_manager.release_resource(resource)
+                return True
+        except:
+            return False
     
     def monitor_nodes(self):
         for node in self.nodes:
@@ -77,6 +87,6 @@ class Master:
 
     def stop(self):
         self.running = False
-        self.assign_thread.join()
+        self.assign_process_thread.join()
         self.assign_resource_thread.join()
-        self.monitor_thread.join()
+        #self.monitor_thread.join()

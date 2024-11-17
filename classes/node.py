@@ -1,5 +1,9 @@
 import time
 import threading
+import logging
+
+# Configure logging to save to a file
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Node:
     def __init__(self, node_id, master):
@@ -7,51 +11,74 @@ class Node:
         self.load = 0
         self.master = master
         self.resources = set()
-        self.is_active = True
+        self.processes = []
+        self.status = "active"
         self.lock = threading.Lock()
-    
-    def assign_process(self, process_id):
-        with self.lock:
-            self.load += 1
-            print(f"Nodo {self.node_id} ha recibido el proceso {process_id}. Carga actual: {self.load}")
-    
-    def release_process(self, process_id):
+
+        self.run_thread = threading.Thread(target=self.run_processes)
+        self.run_thread.start()
+
+    def queue_process(self, process):
+        if not self.status == "failed" and self.load < 5:
+            with self.lock:
+                self.load += 1
+                logging.info(f"Nodo {self.node_id} ha recibido el proceso {process.process_id}. Carga actual: {self.load}")
+                self.processes.append(process)
+
+    def run_processes(self):
+        while self.status == "active":
+            if self.processes:
+                self.status = "running"
+                logging.info(f"Nodo {self.node_id} está corriendo el proceso {self.processes[0].process_id}")
+                self.processes[0].run(self)
+
+    def release_process(self, process):
         with self.lock:
             self.load -= 1
-            print(f"Nodo {self.node_id} ha liberado el proceso {process_id}. Carga actual: {self.load}")
+            logging.info(f"COMPLETED: Nodo {self.node_id} ha liberado el proceso {process.process_id}. Carga actual: {self.load}")
+            self.processes.remove(process)
+            self.status = "active"
 
     def request_resource(self, resource_id):
         """
         Solicita un recurso al master.
-        El master debe de tener un método assign_resource que permita asignar un recurso a un nodo.
         """
-        success = self.master.assign_resource(self, resource_id)
-        if success:
-            with self.lock:
-                self.resources.add(resource_id)
-                print(f"Nodo {self.node_id} ha obtenido el recurso {resource_id}")
+        if self.master.queue_resource(resource_id, self.node_id):
+            self.status = "waiting_resource"
+            logging.info(f"Nodo {self.node_id} está en espera para el recurso {resource_id}")
+            return True
+        return False
+
+    def accept_resource(self, resource_id):
+        """
+        Acepta un recurso asignado por el master.
+        """
+        if self.status == "waiting_resource":
+            self.resources.add(resource_id)
+            logging.info(f"Nodo {self.node_id} ha obtenido el recurso {resource_id}")
         else:
-            print(f"Nodo {self.node_id} está en espera para el recurso {resource_id}")
+            logging.warning(f"Nodo {self.node_id} no puede aceptar el recurso {resource_id}")
 
     def release_resource(self, resource_id):
         """
         Libera un recurso, permitiendo que otros nodos puedan utilizarlo.
-        El master debe de tener un método release_resource que permita recibir un recurso liberado por un nodo.
         """
         with self.lock:
             if resource_id in self.resources:
                 self.resources.remove(resource_id)
-                self.master.release_resource(resource_id)
-                print(f"Nodo {self.node_id} ha liberado el recurso {resource_id}")
+                if self.master.release_resource(resource_id):
+                    logging.info(f"Nodo {self.node_id} ha liberado el recurso {resource_id}")
+                else:
+                    logging.warning(f"Nodo {self.node_id} no ha podido liberar el recurso {resource_id}")
 
     def detect_failure(self):
         while self.is_active:
             try:
                 response = self.master.ping(self)
                 if not response:
-                    print(f"Nodo {self.node_id} ha detectado un fallo en el maestro.")
+                    logging.error(f"Nodo {self.node_id} ha detectado un fallo en el maestro.")
                     self.is_active = False
             except Exception as e:
-                print(f"Nodo {self.node_id} ha detectado un fallo en el maestro.")
+                logging.error(f"Nodo {self.node_id} ha detectado un fallo en el maestro.")
                 self.is_active = False
             time.sleep(5)

@@ -29,4 +29,3 @@ process_queue.put((4, process4))
 
 # Set the process queue in the master
 master.set_process_queue(process_queue)
-

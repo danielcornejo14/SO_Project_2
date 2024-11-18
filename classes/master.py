@@ -112,7 +112,6 @@ class Master:
             return False
     
     def monitor_nodes(self):
-        count = 0
         while self.running:
             time.sleep(2) 
             with self.node_list_lock:
@@ -127,13 +126,6 @@ class Master:
                         new_node = Node(id, self)
                         self.nodes.append(new_node)
                         logging.info(f"MONITOR: # NEW NODE: Se ha creado un nuevo nodo {id}")
-                    elif node.get_status() == "waiting_resource":
-                        count += 1
-                        if count > 5:
-                            logging.warning(f"MONITOR: Nodo {node.node_id} ha esperado mucho tiempo por un recurso")
-                            node.reset_process()
-                            count = 0
-
 
     def stop(self):
         self.running = False

@@ -6,6 +6,26 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Process:
+    """
+    Represents a process that can request and use resources.
+    Attributes:
+        process_id (int): Unique identifier for the process.
+        resources (list): List of resources required by the process.
+        waiting (bool): Indicates if the process is waiting for a resource.
+        reset (bool): Indicates if the process should be reset.
+    Methods:
+        __init__(resources):
+            Initializes a new process with a list of resources.
+        get_process_id():
+            Returns the unique identifier of the process.
+        accept_resource(resource_id):
+            Accepts a resource and sets the waiting flag to False.
+        reset_process():
+            Resets the process by setting the reset flag to True.
+        run(node):
+            Runs the process, requesting resources from the given node.
+    """
+
     def __init__(self, resources):
         self.process_id = random.randint(1000, 9999)
         self.resources = resources

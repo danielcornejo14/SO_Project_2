@@ -8,7 +8,30 @@ import random
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Master:
+    """The Master class is responsible for managing nodes, processes, and resources in a distributed system."""
+
     def __init__(self, num_nodes, resource_manager, node_fail_rate = 0):
+        """
+        Initializes the Master class.
+        Args:
+            num_nodes (int): The number of nodes to create.
+            resource_manager (ResourceManager): The resource manager instance to manage resources.
+            node_fail_rate (float, optional): The failure rate of nodes. Defaults to 0.
+        Attributes:
+            running (bool): Indicates if the master is running.
+            nodes (list): A list of Node instances.
+            process_list_by_node (dict): A dictionary to store processes by node.
+            process_lock (threading.Lock): A lock for process operations.
+            resource_lock (threading.Lock): A lock for resource operations.
+            node_list_lock (threading.Lock): A lock for node list operations.
+            resource_manager (ResourceManager): The resource manager instance.
+            resource_queue (dict): A dictionary to store incoming resource messages.
+            process_queue (PriorityQueue): A priority queue to store incoming processes.
+            assign_process_thread (threading.Thread): A thread to assign processes to nodes.
+            assign_resource_thread (threading.Thread): A thread to assign resources to nodes.
+            monitor_thread (threading.Thread): A thread to monitor the status of nodes.
+        """
+
         # Set the master as running
         self.running = True
         # Create and fill the list of nodes
@@ -37,10 +60,33 @@ class Master:
         self.monitor_thread.start()
     
     def set_process_queue(self, process_queue):
+        """
+        Sets the process queue for the master class.
+        This method allows the user to set the process queue, providing more control
+        over the examples shown.
+        Args:
+            process_queue (list): A list of processes to be set as the process queue.
+        """
+
         # Set by the user (allows more control over the examples shown)
         self.process_queue = process_queue
 
     def assign_process(self):
+        """
+        Assigns processes from the process queue to the node with the lowest load.
+        This method continuously checks if there are processes in the process queue
+        and assigns them to the node with the lowest load. If no nodes are available
+        to handle the process, a new node is created and added to the list of nodes.
+        The method ensures thread-safety by using locks when accessing shared resources
+        such as the process queue and the list of nodes.
+        Raises:
+            Exception: If an error occurs while assigning a process to a node.
+        Logging:
+            Logs warnings if no nodes are available for a process.
+            Logs information when a new node is created.
+            Logs errors if an exception occurs during process assignment.
+        """
+
         while self.running:
             with self.process_lock:
                 if not self.process_queue.empty():
@@ -61,14 +107,33 @@ class Master:
                         logging.error(f"MASTER: Error al asignar proceso: {e}")
 
     def complete_process(self, node_id, process):
+        """
+        Completes the given process on the specified node.
+        This method removes the process from the process list of the specified node
+        and logs the completion of the process.
+        Args:
+            node_id (int): The ID of the node where the process is completed.
+            process (Process): The process object that has been completed.
+        Returns:
+            None
+        """
+
         with self.process_lock:
             self.process_list_by_node[node_id].remove(process)
             logging.info(f"MASTER: Proceso {process.process_id} ha sido completado por el nodo {node_id}")
 
     def queue_resource(self, resource, node_id):
         """
-        Guarda la solicitud de un recurso de un nodo en una cola de espera.
+        Adds a resource to the resource queue for a specific node.
+        Args:
+            resource: The resource to be queued.
+            node_id: The identifier of the node for which the resource is being queued.
+        Returns:
+            bool: True if the resource was successfully queued, False otherwise.
+        Raises:
+            Exception: If an error occurs while trying to queue the resource.
         """
+
         if self.running:
                 try:
                     with self.resource_lock:
@@ -78,6 +143,23 @@ class Master:
                     return False
                     
     def assign_resource(self):
+        """
+        Assigns resources to nodes from the resource queue.
+        This method continuously checks the resource queue and attempts to assign resources to nodes.
+        If a node has been waiting for a resource for more than 5 seconds, a warning is logged, and the node's request is removed from the queue.
+        If a resource is available, it is assigned to the node, and the node's request is removed from the queue.
+        If a resource is not available, a warning is logged.
+        The method uses a lock to ensure thread safety when accessing the resource queue.
+        Attributes:
+            self.running (bool): A flag indicating whether the resource assignment process should continue running.
+            self.resource_lock (threading.Lock): A lock to ensure thread-safe access to the resource queue.
+            self.resource_queue (dict): A dictionary where keys are node IDs and values are tuples containing the resource requested and the time of the request.
+            self.nodes (list): A list of node objects.
+            self.resource_manager (ResourceManager): An object responsible for managing resources.
+        Logs:
+            Warning messages if a node has waited too long for a resource or if a resource is not available.
+        """
+
         while self.running:
             with self.resource_lock:
                 for node_id, resource_req in list(self.resource_queue.items()):
@@ -101,8 +183,16 @@ class Master:
     
     def release_resource(self, resource, node_id):
         """
-        Libera un recurso de un nodo.
+        Releases a specified resource from a given node.
+        This method attempts to release a resource identified by `resource` from the node identified by `node_id`.
+        It logs the release action and uses a resource lock to ensure thread safety.
+        Args:
+            resource (str): The identifier of the resource to be released.
+            node_id (int): The identifier of the node from which the resource is being released.
+        Returns:
+            bool: True if the resource was successfully released, False otherwise.
         """
+
         try:
             with self.resource_lock:
                 logging.info(f"MASTER: Liberando recurso {resource} del nodo {node_id}")
@@ -112,6 +202,20 @@ class Master:
             return False
     
     def monitor_nodes(self):
+        """
+        Monitors the status of nodes in the system and handles node failures.
+        This method runs in a loop while the `self.running` flag is True. It performs the following tasks:
+        1. Sleeps for 2 seconds between iterations to reduce CPU usage.
+        2. Acquires a lock on the node list to ensure thread safety.
+        3. Iterates over a copy of the node list to check the status of each node.
+        4. If a node has failed:
+            a. Logs a warning message indicating the node failure.
+            b. Requeues processes from the failed node with priority 1.
+            c. Removes the failed node from the node list.
+            d. Creates a new node with a random ID and adds it to the node list.
+            e. Logs an informational message indicating the creation of the new node.
+        """
+
         while self.running:
             time.sleep(2) 
             with self.node_list_lock:
@@ -128,6 +232,16 @@ class Master:
                         logging.info(f"MONITOR: # NEW NODE: Se ha creado un nuevo nodo {id}")
 
     def stop(self):
+        """
+        Stops the execution of the master process by setting the running flag to False
+        and joining the associated threads to ensure they have completed.
+        This method performs the following actions:
+        1. Sets the `running` attribute to False to signal the process to stop.
+        2. Waits for the `assign_process_thread` to finish execution.
+        3. Waits for the `assign_resource_thread` to finish execution.
+        4. Waits for the `monitor_thread` to finish execution.
+        """
+
         self.running = False
         self.assign_process_thread.join()
         self.assign_resource_thread.join()

@@ -6,11 +6,14 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Process:
-    def __init__(self, process_id, resources):
-        self.process_id = process_id
+    def __init__(self, resources):
+        self.process_id = random.randint(1000, 9999)
         self.resources = resources
         self.waiting = False
         self.reset = False
+
+    def get_process_id(self):
+        return self.process_id
 
     def accept_resource(self, resource_id):
         self.waiting = False

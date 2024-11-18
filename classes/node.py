@@ -1,14 +1,16 @@
 import time
 import threading
 import logging
+import random
 
 # Configure logging to save to a file
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Node:
-    def __init__(self, node_id, master):
+    def __init__(self, node_id, master, fail_rate = 0):
         self.node_id = node_id
         self.load = 0
+        self.fail_rate = fail_rate
         self.master = master
         self.resources = set()
         self.processes = []
@@ -16,6 +18,9 @@ class Node:
 
         self.run_thread = threading.Thread(target=self.run_processes)
         self.run_thread.start()
+
+    def get_status(self):
+        return self.status
 
     def queue_process(self, process):
         if not self.status == "failed" and self.load < 5:
@@ -30,6 +35,11 @@ class Node:
             if self.processes:
                 self.status = "running"
                 logging.info(f"NODE: Nodo {self.node_id} está corriendo el proceso {self.processes[0].process_id}")
+                random_int = random.randint(1, 10)
+                if random_int <= self.fail_rate:
+                    self.status = "failed"
+                    logging.error(f"NODE: Nodo {self.node_id} ha fallado. Estado actual: {self.status}")
+                    return
                 self.processes[0].run(self)
 
 
@@ -44,6 +54,7 @@ class Node:
             self.load -= 1
             logging.info(f"NODE: # # # # # COMPLETED: Nodo {self.node_id} ha liberado el proceso {process.process_id}. Carga actual: {self.load}")
             self.processes.remove(process)
+            self.master.complete_process(self.node_id, process)
             
         resources_list = list(self.resources)
         for resource in resources_list:
@@ -81,15 +92,3 @@ class Node:
                 logging.info(f"NODE: Nodo {self.node_id} ha liberado el recurso {resource_id}")
             else:
                 logging.warning(f"NODE: Nodo {self.node_id} no ha podido liberar el recurso {resource_id}")
-
-    def detect_failure(self):
-        while self.is_active:
-            try:
-                response = self.master.ping(self)
-                if not response:
-                    logging.error(f"NODE: Nodo {self.node_id} ha detectado un fallo en el maestro.")
-                    self.is_active = False
-            except Exception as e:
-                logging.error(f"NODE: Nodo {self.node_id} ha detectado un fallo en el maestro.")
-                self.is_active = False
-            time.sleep(5)

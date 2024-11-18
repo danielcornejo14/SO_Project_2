@@ -44,16 +44,20 @@ class Master:
                     _, process = self.process_queue.get_nowait()
                     # Find the node with the lowest load
                     lowest_load_node = min(self.nodes, key=lambda node: node.load)
-                    lowest_load_node.queue_process(process)
+                    if not lowest_load_node.queue_process(process):
+                        logging.warning(f"MASTER: No hay nodos disponibles para el proceso {process.process_id}")
+                        self.process_queue.put((_, process))
+                        self.nodes.append(Node(len(self.nodes), self))
+                        logging.info(f"MASTER: Se ha creado un nuevo nodo {len(self.nodes) - 1}")
 
     def queue_resource(self, resource, node_id):
         """
-        Asigna un recurso a un nodo.
+        Guarda la solicitud de un recurso de un nodo en una cola de espera.
         """
         if self.running:
                 try:
                     with self.resource_lock:
-                        self.resource_queue[node_id] = resource
+                        self.resource_queue[node_id] = (resource, time.time())
                         return True
                 except:
                     return False
@@ -61,12 +65,17 @@ class Master:
     def assign_resource(self):
         while self.running:
             with self.resource_lock:
-                for node_id, resource in list(self.resource_queue.items()):
-                    if self.resource_manager.request_resource(resource):
-                        self.nodes[node_id].accept_resource(resource)
+                for node_id, resource_req in list(self.resource_queue.items()):
+                    if time.time() - resource_req[1] > 5:
+                        logging.warning(f"MASTER: Nodo {node_id} ha esperado mucho tiempo por el recurso {resource_req[0]}")
+                        self.resource_queue.pop(node_id)
+                        self.nodes[node_id].reset_process()
+                        continue
+                    if self.resource_manager.request_resource(resource_req[0]):
+                        self.nodes[node_id].accept_resource(resource_req[0])
                         self.resource_queue.pop(node_id)
                     else:
-                        logging.warning(f"Master: No hay recurso {resource} disponible para el nodo {node_id}")
+                        logging.warning(f"MASTER: No hay recurso {resource_req[0]} disponible para el nodo {node_id}")
             time.sleep(1)
     
     def release_resource(self, resource, node_id):
@@ -75,7 +84,7 @@ class Master:
         """
         try:
             with self.resource_lock:
-                logging.info(f"Master: Liberando recurso {resource} del nodo {node_id}")
+                logging.info(f"MASTER: Liberando recurso {resource} del nodo {node_id}")
                 self.resource_manager.release_resource(resource)
                 return True
         except:

@@ -22,6 +22,8 @@ class Node:
             self.load += 1
             logging.info(f"NODE: Nodo {self.node_id} ha recibido el proceso {process.process_id}. Carga actual: {self.load}")
             self.processes.append(process)
+            return True
+        return False
 
     def run_processes(self):
         while self.status == "active":
@@ -30,10 +32,19 @@ class Node:
                 logging.info(f"NODE: Nodo {self.node_id} está corriendo el proceso {self.processes[0].process_id}")
                 self.processes[0].run(self)
 
+
+    def reset_process(self):
+            self.processes[0].reset_process()
+            self.status = "reset_process"
+
     def release_process(self, process):
-        self.load -= 1
-        logging.info(f"NODE: COMPLETED: Nodo {self.node_id} ha liberado el proceso {process.process_id}. Carga actual: {self.load}")
-        self.processes.remove(process)
+        if self.status == "reset_process":
+            logging.info(f"NODE: # # # RESET: Nodo {self.node_id} ha reiniciado el proceso {process.process_id}. Carga actual: {self.load}")
+        else: 
+            self.load -= 1
+            logging.info(f"NODE: # # # # # COMPLETED: Nodo {self.node_id} ha liberado el proceso {process.process_id}. Carga actual: {self.load}")
+            self.processes.remove(process)
+            
         resources_list = list(self.resources)
         for resource in resources_list:
             self.release_resource(resource)
@@ -67,18 +78,18 @@ class Node:
         if resource_id in self.resources:
             self.resources.remove(resource_id)
             if self.master.release_resource(resource_id, self.node_id):
-                logging.info(f"Node: Nodo {self.node_id} ha liberado el recurso {resource_id}")
+                logging.info(f"NODE: Nodo {self.node_id} ha liberado el recurso {resource_id}")
             else:
-                logging.warning(f"Node: Nodo {self.node_id} no ha podido liberar el recurso {resource_id}")
+                logging.warning(f"NODE: Nodo {self.node_id} no ha podido liberar el recurso {resource_id}")
 
     def detect_failure(self):
         while self.is_active:
             try:
                 response = self.master.ping(self)
                 if not response:
-                    logging.error(f"Node: Nodo {self.node_id} ha detectado un fallo en el maestro.")
+                    logging.error(f"NODE: Nodo {self.node_id} ha detectado un fallo en el maestro.")
                     self.is_active = False
             except Exception as e:
-                logging.error(f"Node: Nodo {self.node_id} ha detectado un fallo en el maestro.")
+                logging.error(f"NODE: Nodo {self.node_id} ha detectado un fallo en el maestro.")
                 self.is_active = False
             time.sleep(5)

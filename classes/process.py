@@ -10,9 +10,13 @@ class Process:
         self.process_id = process_id
         self.resources = resources
         self.waiting = False
+        self.reset = False
 
     def accept_resource(self, resource_id):
         self.waiting = False
+
+    def reset_process(self):
+        self.reset = True
 
     def run(self, node):
         for resource in self.resources:
@@ -21,6 +25,12 @@ class Process:
             if node.request_resource(resource):
                 self.waiting = True
                 while self.waiting:
+                    if self.reset:
+                        self.reset = False
+                        self.waiting = False
+                        node.release_process(self)
+                        return
+
                     logging.info(f"PROCESS: Proceso {self.process_id} del nodo {node.node_id} está esperando el recurso {resource}")
                     time.sleep(1)
             else: 

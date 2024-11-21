@@ -5,12 +5,15 @@ import time
 import logging
 import random
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 class Master:
     """The Master class is responsible for managing nodes, processes, and resources in a distributed system."""
 
-    def __init__(self, num_nodes, resource_manager, node_fail_rate = 0):
+    def __init__(self, num_nodes, resource_manager, node_fail_rate=0):
         """
         Initializes the Master class.
         Args:
@@ -35,7 +38,10 @@ class Master:
         # Set the master as running
         self.running = True
         # Create and fill the list of nodes
-        self.nodes = [Node(random.randint(1000, 9999), self, node_fail_rate) for i in range(num_nodes)]
+        self.nodes = [
+            Node(random.randint(1000, 9999), self, node_fail_rate)
+            for i in range(num_nodes)
+        ]
         self.process_list_by_node = {}
 
         self.process_lock = threading.Lock()
@@ -58,7 +64,35 @@ class Master:
 
         self.monitor_thread = threading.Thread(target=self.monitor_nodes)
         self.monitor_thread.start()
-    
+
+    def log_initial_state(self, process_queue):
+        """
+        Logs the initial state of nodes, resources, and processes.
+        This method outputs a summary of the initial setup of the master, including:
+        - Number of nodes
+        - Resources available in the resource manager
+        - Initial queue of processes and their required resources
+        """
+        logging.info("-" * 50)
+        logging.info("MASTER: Estado inicial del sistema")
+
+        logging.info(f"MASTER: Nodos iniciales: {len(self.nodes)}")
+        for node in self.nodes:
+            logging.info(
+                f"MASTER: Nodo ID: {node.node_id}, Estado: {node.get_status()}, Load: {node.load}"
+            )
+
+        for key, value in self.resource_manager.get_resources().items():
+            logging.info(f"MASTER: Recurso: {key}, Cantidad: {value}")
+
+        logging.info(f"MASTER: Procesos en espera: {process_queue.qsize()}")
+
+        for _, process_id, process in list(process_queue.queue):
+            logging.info(
+                f"MASTER: Proceso en cola - ID: {process_id}, Recursos: {process.resources}"
+            )
+        logging.info("-" * 50)
+
     def set_process_queue(self, process_queue):
         """
         Sets the process queue for the master class.
@@ -67,6 +101,9 @@ class Master:
         Args:
             process_queue (list): A list of processes to be set as the process queue.
         """
+
+        # Log the initial state of the system
+        self.log_initial_state(process_queue)
 
         # Set by the user (allows more control over the examples shown)
         self.process_queue = process_queue
@@ -96,13 +133,19 @@ class Master:
                         lowest_load_node = min(self.nodes, key=lambda node: node.load)
                         if not lowest_load_node.queue_process(process):
                             with self.node_list_lock:
-                                logging.warning(f"MASTER: No hay nodos disponibles para el proceso {process.process_id}")
+                                logging.warning(
+                                    f"MASTER: No hay nodos disponibles para el proceso {process.process_id}"
+                                )
                                 self.process_queue.put((_, process_id, process))
                                 id = random.randint(1000, 9999)
                                 self.nodes.append(Node(id, self))
-                                logging.info(f"MASTER: # NEW NODE: Se ha creado un nuevo nodo {id}")
-                        else: 
-                            self.process_list_by_node.setdefault(lowest_load_node.node_id, []).append(process)
+                                logging.info(
+                                    f"MASTER: # NEW NODE: Se ha creado un nuevo nodo {id}"
+                                )
+                        else:
+                            self.process_list_by_node.setdefault(
+                                lowest_load_node.node_id, []
+                            ).append(process)
                     except Exception as e:
                         logging.error(f"MASTER: Error al asignar proceso: {e}")
 
@@ -120,7 +163,9 @@ class Master:
 
         with self.process_lock:
             self.process_list_by_node[node_id].remove(process)
-            logging.info(f"MASTER: Proceso {process.process_id} ha sido completado por el nodo {node_id}")
+            logging.info(
+                f"MASTER: Proceso {process.process_id} ha sido completado por el nodo {node_id}"
+            )
 
     def queue_resource(self, resource, node_id):
         """
@@ -135,13 +180,13 @@ class Master:
         """
 
         if self.running:
-                try:
-                    with self.resource_lock:
-                        self.resource_queue[node_id] = (resource, time.time())
-                        return True
-                except:
-                    return False
-                    
+            try:
+                with self.resource_lock:
+                    self.resource_queue[node_id] = (resource, time.time())
+                    return True
+            except:
+                return False
+
     def assign_resource(self):
         """
         Assigns resources to nodes from the resource queue.
@@ -164,23 +209,33 @@ class Master:
             with self.resource_lock:
                 for node_id, resource_req in list(self.resource_queue.items()):
                     if time.time() - resource_req[1] > 5:
-                        logging.warning(f"MASTER: Nodo {node_id} ha esperado mucho tiempo por el recurso {resource_req[0]}")
+                        logging.warning(
+                            f"MASTER: Nodo {node_id} ha esperado mucho tiempo por el recurso {resource_req[0]}"
+                        )
                         self.resource_queue.pop(node_id)
-                        node = next((node for node in self.nodes if node.node_id == node_id), None)
+                        node = next(
+                            (node for node in self.nodes if node.node_id == node_id),
+                            None,
+                        )
                         if node:
                             node.reset_process()
                         continue
                     if self.resource_manager.request_resource(resource_req[0]):
-                        node = next((node for node in self.nodes if node.node_id == node_id), None)
+                        node = next(
+                            (node for node in self.nodes if node.node_id == node_id),
+                            None,
+                        )
                         if node:
                             node.accept_resource(resource_req[0])
                             self.resource_queue.pop(node_id)
                         continue
 
                     else:
-                        logging.warning(f"MASTER: No hay recurso {resource_req[0]} disponible para el nodo {node_id}")
+                        logging.warning(
+                            f"MASTER: No hay recurso {resource_req[0]} disponible para el nodo {node_id}"
+                        )
             time.sleep(1)
-    
+
     def release_resource(self, resource, node_id):
         """
         Releases a specified resource from a given node.
@@ -200,7 +255,21 @@ class Master:
                 return True
         except:
             return False
-    
+
+    def add_node(self):
+        """
+        Adds a new node to the system.
+        This method creates a new node with a random ID and adds it to the list of nodes.
+        It logs an informational message indicating the creation of the new node.
+        Returns:
+            None
+        """
+
+        with self.node_list_lock:
+            id = random.randint(1000, 9999)
+            self.nodes.append(Node(id, self))
+            logging.info(f"MASTER: # NEW NODE: Se ha creado un nuevo nodo {id}")
+
     def monitor_nodes(self):
         """
         Monitors the status of nodes in the system and handles node failures.
@@ -217,19 +286,25 @@ class Master:
         """
 
         while self.running:
-            time.sleep(2) 
+            time.sleep(2)
             with self.node_list_lock:
                 for node in list(self.nodes):  # Iterate over a copy of the list
                     if node.get_status() == "failed":
-                        logging.warning(f"MONITOR: # # FAILED: Nodo {node.node_id} ha fallado")
+                        logging.warning(
+                            f"MONITOR: # # FAILED: Nodo {node.node_id} ha fallado"
+                        )
                         # Requeue processes from the failed node
                         for process in self.process_list_by_node.pop(node.node_id, []):
-                                self.process_queue.put((1, process.get_process_id(), process))  # Requeue with priority 1
+                            self.process_queue.put(
+                                (1, process.get_process_id(), process)
+                            )  # Requeue with priority 1
                         self.nodes.remove(node)
                         id = random.randint(1000, 9999)
                         new_node = Node(id, self)
                         self.nodes.append(new_node)
-                        logging.info(f"MONITOR: # NEW NODE: Se ha creado un nuevo nodo {id}")
+                        logging.info(
+                            f"MONITOR: # NEW NODE: Se ha creado un nuevo nodo {id}"
+                        )
 
     def stop(self):
         """
